@@ -11,6 +11,12 @@ pub enum Error {
 
     #[error("unknown error: {0}")]
     UnknownError(String),
+
+    //TODO: decide if this should move to a subtype
+}
+
+pub enum RenderError {
+
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

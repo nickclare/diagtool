@@ -6,23 +6,102 @@
 //!
 //!  (Note: how this actually will get represented as a rust data structure isn't something I have figured out :) )
 
-use std::{any::TypeId, collections::HashMap};
+pub mod visual;
+
+use std::{
+    any::TypeId,
+    cell::RefCell,
+    collections::{BTreeMap, HashMap},
+    rc::Rc,
+};
 
 pub struct Diagram {
-    pub(crate) nodes: Vec<DiagramNode>,
+    next_idx: usize,
+    pub(crate) nodes: BTreeMap<NodeIdx, DiagramNode>,
+}
+
+impl Diagram {
+    pub fn new() -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {
+            next_idx: 0,
+            nodes: BTreeMap::new(),
+        }))
+    }
+
+    pub fn get(&self, idx: NodeIdx) -> Option<&DiagramNode> {
+        self.nodes.get(&idx)
+    }
+
+    pub fn get_mut(&mut self, idx: NodeIdx) -> Option<&mut DiagramNode> {
+        self.nodes.get_mut(&idx)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &DiagramNode> {
+        self.nodes.values()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct NodeIdx(pub(crate) usize);
+
+impl From<usize> for NodeIdx {
+    fn from(v: usize) -> Self {
+        NodeIdx(v)
+    }
+}
+impl From<NodeIdx> for usize {
+    fn from(v: NodeIdx) -> Self {
+        v.0
+    }
+}
+
+pub type NodeData = HashMap<TypeId, Box<dyn Data>>;
+
+#[non_exhaustive]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum NodeType {
+    /// Root of the object graph.
+    Root,
+    /// Denotes a box that can get rendered, depending on `BoxData`.
+    Box,
+    Text,
+    Connector,
+    Line,
 }
 
 pub struct DiagramNode {
-    data: HashMap<TypeId, Box<dyn Data>>,
+    diagram: Rc<RefCell<Diagram>>,
+    pub id: NodeIdx,
+    pub ty: NodeType,
+    data: NodeData,
+    children: Vec<NodeIdx>,
 }
+
+// impl Diagram {
+//     pub fn new_node<'a>(self: Rc<RefCell<Self>>) -> &'a mut DiagramNode {
+//         let idx = NodeIdx(self.next_idx);
+//         self.next_idx += 1;
+//         let node = DiagramNode::new(self, idx);
+//         self.nodes.entry(idx).or_insert(node)
+//     }
+// }
 
 pub trait Data: std::fmt::Debug {}
 
 impl DiagramNode {
-    pub fn new() -> Self {
-        Self {
+    pub fn create(diagram: Rc<RefCell<Diagram>>, ty: NodeType) -> NodeIdx {
+        let mut d = diagram.as_ref().borrow_mut();
+        let idx = d.next_idx.into();
+        d.next_idx += 1;
+        let node = Self {
+            diagram: Rc::clone(&diagram),
+            ty,
+            id: idx,
             data: HashMap::new(),
-        }
+            children: Vec::new(),
+        };
+        d.nodes.insert(idx, node);
+        idx
     }
 
     pub fn insert<T: Data + 'static>(&mut self, data: T) -> Option<&T> {
@@ -42,55 +121,25 @@ impl DiagramNode {
             &*(p as *const T)
         })
     }
-}
 
-impl Default for DiagramNode {
-    fn default() -> Self {
-        Self::new()
+    /// Make `child` a child node of `self`.
+    pub fn link_child(&mut self, child: NodeIdx) -> bool {
+        let diagram = self.diagram.as_ref().borrow();
+        if diagram.nodes.contains_key(&child) {
+            self.children.push(child);
+            true
+        } else {
+            // Couldn't create link, no such child element exists.
+            false
+        }
     }
-}
 
-#[derive(Clone, Debug, Copy, Default)]
-pub struct ConstraintRange {
-    min: Option<i64>,
-    max: Option<i64>,
-}
-
-/// Data component for storing box constraints
-#[derive(Clone, Debug, Default)]
-pub(crate) struct ConstraintData {
-    pub x: ConstraintRange,
-    pub y: ConstraintRange,
-    pub w: ConstraintRange,
-    pub h: ConstraintRange,
-}
-
-impl Data for ConstraintData {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn can_insert_and_get_data() {
-        let mut node = DiagramNode::new();
-        let mut constraints = ConstraintData::default();
-        constraints.x.min = Some(32);
-        constraints.x.max = Some(44);
-        node.insert(constraints);
-
-        let constraints = node.get::<ConstraintData>().unwrap();
-        assert_eq!(constraints.x.min, Some(32));
-        assert_eq!(constraints.x.max, Some(44));
-        assert_eq!(constraints.y.max, None);
-
-        let mut new_constraints = constraints.clone();
-        new_constraints.w.min = Some(66);
-        let old_constraints = node
-            .insert(new_constraints)
-            .expect("should be an existing value for `ConstraintData`");
-        assert_eq!(old_constraints.w.min, None);
-        let constraints = node.get::<ConstraintData>().unwrap();
-        assert_eq!(constraints.w.min, Some(66));
+    pub fn unlink_child(&mut self, child: NodeIdx) -> bool {
+        if let Some(idx) = self.children.iter().position(|e| *e == child) {
+            self.children.remove(idx);
+            true
+        } else {
+            false
+        }
     }
 }
