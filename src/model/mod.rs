@@ -11,17 +11,64 @@ pub mod visual;
 use std::{
     any::TypeId,
     cell::RefCell,
-    collections::{BTreeMap, HashMap},
+    collections::{btree_map::Values, BTreeMap, HashMap},
     rc::Rc,
 };
 
+#[derive(Clone)]
 pub struct Diagram {
+    inner: Rc<RefCell<DiagramInner>>,
+}
+
+struct DiagramInner {
     next_idx: usize,
     pub(crate) nodes: BTreeMap<NodeIdx, DiagramNode>,
 }
 
 impl Diagram {
-    pub fn new() -> Rc<RefCell<Self>> {
+    pub fn new() -> Self {
+        let inner = DiagramInner::create();
+        Self { inner }
+    }
+
+    pub fn get(&self, idx: NodeIdx) -> Option<&DiagramNode> {
+        self.inner.borrow().nodes.get(&idx)
+    }
+
+    pub fn get_mut(&mut self, idx: NodeIdx) -> Option<&mut DiagramNode> {
+        self.inner.borrow_mut().get_mut(idx)
+    }
+
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = &'a DiagramNode> {
+        NodeIterator {
+            diagram: self.clone(),
+            inner: None,
+        }
+    }
+}
+
+struct NodeIterator<'a> {
+    diagram: Diagram,
+    inner: Option<Values<'a, NodeIdx, DiagramNode>>,
+}
+
+impl<'a> Iterator for NodeIterator<'a> {
+    type Item = &'a DiagramNode;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(iter) = &mut self.inner {
+            iter.next()
+        } else {
+            let d = self.diagram.inner.borrow();
+            let iter = d.nodes.values();
+            self.inner = Some(iter);
+            self.next()
+        }
+    }
+}
+
+impl DiagramInner {
+    pub fn create() -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
             next_idx: 0,
             nodes: BTreeMap::new(),
@@ -70,7 +117,7 @@ pub enum NodeType {
 }
 
 pub struct DiagramNode {
-    diagram: Rc<RefCell<Diagram>>,
+    diagram: Rc<RefCell<DiagramInner>>,
     pub id: NodeIdx,
     pub ty: NodeType,
     data: NodeData,
@@ -89,7 +136,7 @@ pub struct DiagramNode {
 pub trait Data: std::fmt::Debug {}
 
 impl DiagramNode {
-    pub fn create(diagram: Rc<RefCell<Diagram>>, ty: NodeType) -> NodeIdx {
+    pub fn create(diagram: Rc<RefCell<DiagramInner>>, ty: NodeType) -> NodeIdx {
         let mut d = diagram.as_ref().borrow_mut();
         let idx = d.next_idx.into();
         d.next_idx += 1;

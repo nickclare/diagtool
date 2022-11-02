@@ -6,17 +6,13 @@ pub enum Error {
         reason: Box<dyn std::error::Error + Send + Sync>,
     },
 
-    #[error("freetype error: {0}")]
-    FtError(freetype::Error),
-
+    // #[error("freetype error: {0}")]
+    // FtError(freetype::Error),
     #[error("unknown error: {0}")]
     UnknownError(String),
-
     //TODO: decide if this should move to a subtype
 }
 
-pub enum RenderError {
-
-}
+pub enum RenderError {}
 
 pub type Result<T> = std::result::Result<T, Error>;
