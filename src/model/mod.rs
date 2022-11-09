@@ -6,6 +6,7 @@
 //!
 //!  (Note: how this actually will get represented as a rust data structure isn't something I have figured out :) )
 
+mod newmodel;
 pub mod visual;
 
 use std::{
@@ -15,13 +16,15 @@ use std::{
     rc::Rc,
 };
 
+pub type DiagRef = Rc<RefCell<Diagram>>;
+
 pub struct Diagram {
     next_idx: usize,
     pub(crate) nodes: BTreeMap<NodeIdx, DiagramNode>,
 }
 
 impl Diagram {
-    pub fn new() -> Rc<RefCell<Self>> {
+    pub fn new() -> DiagRef {
         Rc::new(RefCell::new(Self {
             next_idx: 0,
             nodes: BTreeMap::new(),
@@ -77,19 +80,10 @@ pub struct DiagramNode {
     children: Vec<NodeIdx>,
 }
 
-// impl Diagram {
-//     pub fn new_node<'a>(self: Rc<RefCell<Self>>) -> &'a mut DiagramNode {
-//         let idx = NodeIdx(self.next_idx);
-//         self.next_idx += 1;
-//         let node = DiagramNode::new(self, idx);
-//         self.nodes.entry(idx).or_insert(node)
-//     }
-// }
-
 pub trait Data: std::fmt::Debug {}
 
 impl DiagramNode {
-    pub fn create(diagram: Rc<RefCell<Diagram>>, ty: NodeType) -> NodeIdx {
+    pub fn create(diagram: DiagRef, ty: NodeType) -> NodeIdx {
         let mut d = diagram.as_ref().borrow_mut();
         let idx = d.next_idx.into();
         d.next_idx += 1;
