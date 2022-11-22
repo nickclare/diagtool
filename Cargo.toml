@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.65"
 bumpalo = "3.11.0"
-freetype-rs = "0.31.0"
+freetype-rs = "0.32.0"
 good_lp = "1.3.2"
 svg = "0.12.0"
 thiserror = "1.0.37"
